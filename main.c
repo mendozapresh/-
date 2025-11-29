@@ -33,7 +33,7 @@ int kbhit_check()
 #define NAME_COLUMN_INDEX 30
 #define MAX_POKEMON_COUNT 801
 #define MAX_NAME_LEN 32
-#define MAX_CLASS_LEN 64
+#define MAX_CLASS_LEN 64 // Used for type name strings
 #define NUM_CLASSES_TO_USE 10
 // ---------------------------
 
@@ -105,19 +105,20 @@ static void select_extract_field(char *src, char *dest, size_t max_len)
     }
 }
 
-int load_pokemon_data_for_selection(char names[MAX_POKEMON_COUNT][MAX_NAME_LEN], char classes[MAX_POKEMON_COUNT][MAX_CLASS_LEN])
+// Renamed 'classes' parameter to 'types' for clarity
+int load_pokemon_data_for_selection(char names[MAX_POKEMON_COUNT][MAX_NAME_LEN], char types[MAX_POKEMON_COUNT][MAX_CLASS_LEN])
 {
     FILE *file = fopen("pokemon.csv", "r");
     if (file == NULL)
     {
         fprintf(stderr, "[FATAL ERROR] Cannot open pokemon.csv. Using minimal hardcoded list for selection.\n");
-        // Fallback used if file I/O fails
+        // Fallback: use actual types for consistency with filtering logic
         strncpy(names[0], "Bulbasaur", MAX_NAME_LEN);
-        strncpy(classes[0], "Seed Pokémon", MAX_CLASS_LEN);
+        strncpy(types[0], "grass", MAX_CLASS_LEN);
         strncpy(names[1], "Charmander", MAX_NAME_LEN);
-        strncpy(classes[1], "Lizard Pokémon", MAX_CLASS_LEN);
+        strncpy(types[1], "fire", MAX_CLASS_LEN);
         strncpy(names[2], "Squirtle", MAX_NAME_LEN);
-        strncpy(classes[2], "Tiny Turtle Pokémon", MAX_CLASS_LEN);
+        strncpy(types[2], "water", MAX_CLASS_LEN);
         return 3;
     }
 
@@ -132,7 +133,7 @@ int load_pokemon_data_for_selection(char names[MAX_POKEMON_COUNT][MAX_NAME_LEN],
 
     while (fgets(line, sizeof(line), file) && count < MAX_POKEMON_COUNT)
     {
-        char temp_class[MAX_CLASS_LEN];
+        char temp_type[MAX_CLASS_LEN];
         char temp_name[MAX_NAME_LEN];
 
         char line_copy_1[8192];
@@ -142,21 +143,21 @@ int load_pokemon_data_for_selection(char names[MAX_POKEMON_COUNT][MAX_NAME_LEN],
         strncpy(line_copy_2, line, sizeof(line_copy_2) - 1);
         line_copy_2[sizeof(line_copy_2) - 1] = '\0';
 
-        // Extract type (Index 24)
+        // Extract Type1 (Index 36 - Matches IDX_TYPE1 in damage_calc.c)
         if (select_find_field(line_copy_1, TYPE1_COLUMN_INDEX) == NULL)
             continue;
-        select_extract_field(select_find_field(line_copy_1, TYPE1_COLUMN_INDEX), temp_class, MAX_CLASS_LEN);
+        select_extract_field(select_find_field(line_copy_1, TYPE1_COLUMN_INDEX), temp_type, MAX_CLASS_LEN);
 
         // Extract Name (Index 30)
         if (select_find_field(line_copy_2, NAME_COLUMN_INDEX) == NULL)
             continue;
         select_extract_field(select_find_field(line_copy_2, NAME_COLUMN_INDEX), temp_name, MAX_NAME_LEN);
 
-        if (temp_name[0] == '\0' || temp_class[0] == '\0')
+        if (temp_name[0] == '\0' || temp_type[0] == '\0')
             continue;
 
-        strncpy(classes[count], temp_class, MAX_CLASS_LEN - 1);
-        classes[count][MAX_CLASS_LEN - 1] = '\0';
+        strncpy(types[count], temp_type, MAX_CLASS_LEN - 1);
+        types[count][MAX_CLASS_LEN - 1] = '\0';
         strncpy(names[count], temp_name, MAX_NAME_LEN - 1);
         names[count][MAX_NAME_LEN - 1] = '\0';
         count++;
@@ -196,10 +197,30 @@ void print_battle_status(BattleContext *ctx)
            ctx->is_my_turn ? "MY TURN" : "OPPONENT'S TURN");
     printf("========================================\n");
 
-    // Only show moves to players, not spectators
+    // Only show moves to players, not spectators, and fetch abilities for moves
     if (ctx->my_role != ROLE_SPECTATOR && ctx->is_my_turn && ctx->state == STATE_WAITING_FOR_MOVE)
     {
-        printf("Available Moves: Tackle, Ember, Water Gun\n");
+        const PokemonData *p = get_pokemon(ctx->my_pokemon);
+
+        if (p && p->ability_count > 0)
+        {
+            printf("Available Moves (Abilities): ");
+            bool first = true;
+            for (int i = 0; i < p->ability_count; i++)
+            {
+                if (p->abilities[i][0] == '\0')
+                    continue; // skip empty
+                if (!first)
+                    printf(", ");
+                printf("%s", p->abilities[i]);
+                first = false;
+            }
+            printf("\n");
+        }
+        else
+        {
+            printf("Available Moves: Abilities not loaded or Pokémon not found.\n");
+        }
     }
     print_prompt(ctx);
 }
@@ -230,9 +251,9 @@ int main(int argc, char *argv[])
     // --- POKEMON SELECTION LOGIC START ---
 
     char all_names[MAX_POKEMON_COUNT][MAX_NAME_LEN];
-    char all_types[MAX_POKEMON_COUNT][MAX_CLASS_LEN];
+    char all_types[MAX_POKEMON_COUNT][MAX_CLASS_LEN]; // Renamed for clarity: stores the Type1 name
     int total_pokemon = load_pokemon_data_for_selection(all_names, all_types);
-
+    
     // Spectators don't pick
     char pokemon_name_buffer[32] = "SPECTATOR_UNIT";
 
@@ -247,7 +268,7 @@ int main(int argc, char *argv[])
         }
 
         // -------- STAGE 1: PICK TYPE --------
-        char unique_classes[NUM_CLASSES_TO_USE][MAX_CLASS_LEN];
+        char unique_types[NUM_CLASSES_TO_USE][MAX_CLASS_LEN]; // Renamed for clarity
         int unique_count = 0;
 
         for (int i = 0; i < total_pokemon && unique_count < NUM_CLASSES_TO_USE; i++)
@@ -255,7 +276,7 @@ int main(int argc, char *argv[])
             int repeat = 0;
             for (int j = 0; j < unique_count; j++)
             {
-                if (strcmp(all_types[i], unique_classes[j]) == 0)
+                if (strcmp(all_types[i], unique_types[j]) == 0)
                 {
                     repeat = 1;
                     break;
@@ -263,21 +284,21 @@ int main(int argc, char *argv[])
             }
             if (!repeat)
             {
-                strncpy(unique_classes[unique_count], all_types[i], MAX_CLASS_LEN - 1);
-                unique_classes[unique_count][MAX_CLASS_LEN - 1] = '\0';
+                strncpy(unique_types[unique_count], all_types[i], MAX_CLASS_LEN - 1);
+                unique_types[unique_count][MAX_CLASS_LEN - 1] = '\0';
                 unique_count++;
             }
         }
 
         // Display type choices
-        int class_choice = -1;
+        int type_choice = -1; // Renamed for clarity
         char input_buffer[16];
 
         do
         {
             printf("\n--- STAGE 1: Choose type (First %d Loaded) ---\n", unique_count);
             for (int i = 0; i < unique_count; i++)
-                printf("%d) %s\n", i + 1, unique_classes[i]);
+                printf("%d) %s\n", i + 1, unique_types[i]);
 
             printf("Enter the number of a type (1-%d): ", unique_count);
 
@@ -288,14 +309,14 @@ int main(int argc, char *argv[])
             }
 
             input_buffer[strcspn(input_buffer, "\n")] = 0;
-            class_choice = atoi(input_buffer);
+            type_choice = atoi(input_buffer); // Renamed for clarity
 
-            if (class_choice < 1 || class_choice > unique_count)
+            if (type_choice < 1 || type_choice > unique_count)
                 printf("\n*** Invalid choice. Try 1-%d ***\n", unique_count);
 
-        } while (class_choice < 1 || class_choice > unique_count);
+        } while (type_choice < 1 || type_choice > unique_count);
 
-        const char *chosen_class = unique_classes[class_choice - 1];
+        const char *chosen_type = unique_types[type_choice - 1]; // Renamed for clarity
 
         // -------- STAGE 2: PICK POKÉMON NAME --------
 
@@ -304,7 +325,7 @@ int main(int argc, char *argv[])
 
         for (int i = 0; i < total_pokemon; i++)
         {
-            if (strcmp(all_types[i], chosen_class) == 0)
+            if (strcmp(all_types[i], chosen_type) == 0)
             {
                 strncpy(filtered_names[filtered_count], all_names[i], MAX_NAME_LEN - 1);
                 filtered_names[filtered_count][MAX_NAME_LEN - 1] = '\0';
@@ -324,7 +345,7 @@ int main(int argc, char *argv[])
         do
         {
             printf("\n--- STAGE 2: Choose a %s Pokémon (%d available) ---\n",
-                   chosen_class, filtered_count);
+                   chosen_type, filtered_count); // Uses chosen_type
 
             for (int i = 0; i < filtered_count; i++)
                 printf("%d) %s\n", i + 1, filtered_names[i]);
