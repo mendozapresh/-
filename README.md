@@ -14,6 +14,13 @@ percentage_male = 50
 type 2 = randomized
 weight_kg = 5
 
+How to run:
+1. gcc main.c network.c game_logic.c damage_calc.c chat.c -o pokemon.exe -lws2_32 -std=c99
+2. pokemon host 8080 (HOST)
+3. pokemon join 8081 127.0.0.1 8080 (JOIN)
+4. pokemon spectate 8082 127.0.0.1 8080 (SPECTATE)
+
+
 Documentation:
 
 GAME LOGIC

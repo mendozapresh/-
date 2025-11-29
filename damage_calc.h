@@ -13,6 +13,7 @@
 
 #define MAX_POKEMON 256
 #define MAX_MOVES 256
+#define MAX_ABILITIES_PER_POKEMON 8
 
 // ---- POKEMON STATS ----
 typedef struct
@@ -27,6 +28,8 @@ typedef struct
     int sp_attack;
     int sp_defense;
     int speed;
+    char abilities[MAX_ABILITIES_PER_POKEMON][MAX_MOVE_NAME];
+    int ability_count;
 } PokemonData;
 
 // ---- MOVE DATA ----
@@ -71,6 +74,17 @@ const MoveData *get_move(const char *move_name);
 
 int apply_boost(int base_stat, int boost_stage);
 float get_type_multiplier(const char *move_type, const char *def_type1, const char *def_type2);
+
+FILE *open_pokemon_csv(const char *path);
+
+// Parse abilities from CSV
+int parse_abilities(const char *field, char abilities[][MAX_MOVE_NAME], int max_abilities);
+
+// Generates moves from Pokémon abilities
+void load_moves_from_pokemon();
+
+// Convenience loader
+void load_all_pokemon_and_moves(const char *pokemon_csv);
 
 DamageResult calculate_damage_logic(const char *attacker_name, const char *defender_name, const char *move_name);
 
