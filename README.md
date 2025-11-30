@@ -15,6 +15,7 @@ type 2 = randomized
 weight_kg = 5
 
 How to run:
+C:\Users\Precious\Downloads\CSNETWKMP-main\CSNETWKMP-main
 1. gcc main.c network.c game_logic.c damage_calc.c chat.c -o pokemon.exe -lws2_32 -std=c99
 2. pokemon host 8080 (HOST)
 3. pokemon join 8081 127.0.0.1 8080 (JOIN)

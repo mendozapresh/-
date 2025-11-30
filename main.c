@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
     char all_names[MAX_POKEMON_COUNT][MAX_NAME_LEN];
     char all_types[MAX_POKEMON_COUNT][MAX_CLASS_LEN]; // Renamed for clarity: stores the Type1 name
     int total_pokemon = load_pokemon_data_for_selection(all_names, all_types);
-    
+
     // Spectators don't pick
     char pokemon_name_buffer[32] = "SPECTATOR_UNIT";
 
@@ -370,6 +370,7 @@ int main(int argc, char *argv[])
         pokemon_name_buffer[31] = '\0';
     }
 
+    load_all_pokemon_and_moves("pokemon.csv");
     init_battle(&ctx, role, pokemon_name_buffer);
     // --- POKEMON SELECTION LOGIC END ---
 

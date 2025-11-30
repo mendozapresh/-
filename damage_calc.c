@@ -85,25 +85,51 @@ static void extract_field(char *src, char *dest, size_t max_len)
 {
     if (!src || !dest || max_len == 0)
         return;
+
+    // 1. Find the end of the field (up to the next delimiter/newline)
     char *end = src;
     while (*end != '\0' && *end != ',' && *end != '\n' && *end != '\r')
         end++;
+
+    // 2. Copy the raw field content to the destination buffer
     size_t len = (size_t)(end - src);
     if (len >= max_len)
         len = max_len - 1;
     memcpy(dest, src, len);
-    dest[len] = '\0';
-    // trim quotes/whitespace
+    dest[len] = '\0'; // Ensure null termination of the copied raw string
+
+    // *** ROBUST TRIM LOGIC ***
     char *s = dest;
-    while (*s && isspace((unsigned char)*s))
-        s++;
-    if (*s == '"' && s[1] != '\0')
-        s++;
     char *e = dest + strlen(dest) - 1;
-    while (e >= s && isspace((unsigned char)*e))
-        *e-- = 0;
-    if (e >= s && *e == '"')
-        *e = 0;
+
+    // 3. Trim leading whitespace and potential outer quote (e.g., remove ' "')
+    while (*s)
+    {
+        if (isspace((unsigned char)*s) || *s == '"')
+        {
+            s++;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    // 4. Trim trailing whitespace and potential outer quote (e.g., remove '" ')
+    while (e >= s)
+    {
+        if (isspace((unsigned char)*e) || *e == '"')
+        {
+            *e = '\0';
+            e--;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    // 5. Shift the remaining string to the start if leading characters were trimmed
     if (s != dest)
         memmove(dest, s, strlen(s) + 1);
 }
@@ -128,31 +154,43 @@ int parse_abilities(const char *field, char abilities[][MAX_MOVE_NAME], int max_
         return 0;
     int count = 0;
     const char *p = field;
-    while (*p && (*p == '[' || *p == ' ' || *p == '"' || *p == '\''))
-        p++;
-    while (*p && *p != ']')
+
+    // 1. Move pointer to the start of the *first* ability name (past '[' and potential '"').
+    p = strchr(p, '\'');
+    if (!p)
+        return 0;
+    p++; // Now pointing at the first character of the first ability name.
+
+    // 2. Loop until the end of the ability list ']' or max abilities reached.
+    while (*p && *p != ']' && count < max_abilities)
     {
-        char buf[MAX_MOVE_NAME] = {0};
-        int i = 0;
-        while (*p && (*p == '\'' || *p == '"' || *p == ' '))
-            p++;
-        while (*p && *p != ',' && *p != ']')
+        // 3. Find the closing single quote (''') for the current ability name.
+        const char *end_q = strchr(p, '\'');
+
+        if (end_q)
         {
-            if (i < MAX_MOVE_NAME - 1)
-                buf[i++] = *p;
-            p++;
+            size_t len = end_q - p;
+
+            // Check for valid length and store the ability name (including internal spaces).
+            if (len > 0 && len < MAX_MOVE_NAME)
+            {
+                strncpy(abilities[count], p, len);
+                abilities[count][len] = 0;
+                count++;
+            }
+
+            // Move pointer past the closing quote.
+            p = end_q + 1;
+
+            // 4. Skip over any separators (',', ' ', or opening quote for the next item).
+            while (*p && (*p == ',' || *p == ' ' || *p == '\''))
+                p++;
         }
-        int len = strlen(buf);
-        while (len > 0 && (buf[len - 1] == '\'' || buf[len - 1] == '"' || buf[len - 1] == ' '))
-            buf[--len] = '\0';
-        if (len > 0 && count < max_abilities)
+        else
         {
-            strncpy(abilities[count], buf, MAX_MOVE_NAME - 1);
-            abilities[count][MAX_MOVE_NAME - 1] = 0;
-            count++;
+            // Malformed string (missing closing quotes).
+            break;
         }
-        while (*p && (*p == ',' || *p == ' '))
-            p++;
     }
     return count;
 }
